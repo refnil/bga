@@ -1,10 +1,6 @@
 import logging.handlers
 import re
 
-from creds_iface import get_discord_id
-from creds_iface import get_login
-from discord_utils import send_table_embed
-from creds_iface import get_active_session, get_all_logins
 from utils import normalize_name
 
 logger = logging.getLogger(__name__)

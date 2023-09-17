@@ -8,3 +8,5 @@ errs
 pid
 .devenv
 .direnv/
+
+*.json
