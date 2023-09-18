@@ -8,7 +8,7 @@ import time
 
 import requests
 
-from utils import normalize_name
+from .utils import normalize_name
 
 logging.getLogger("aiohttp").setLevel(logging.WARN)
 

@@ -1,8 +1,9 @@
 import logging.handlers
 import re
-from bga_account import BGAAccount
 
-from utils import normalize_name
+from .bga_account import BGAAccount
+
+from .utils import normalize_name
 
 logger = logging.getLogger(__name__)
 logging.getLogger("discord").setLevel(logging.WARN)

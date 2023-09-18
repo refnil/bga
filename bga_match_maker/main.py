@@ -6,11 +6,11 @@ import json
 from dataclasses import dataclass, field
 import logging.handlers
 import argparse
-from bga_account import BGAAccount
 
-from bga_game_list import bga_game_message_list, get_game_list, is_game_valid
-from bga_create_game import create_bga_game, setup_bga_game
-from utils import send_help
+from .bga_account import BGAAccount
+from .bga_game_list import bga_game_message_list, get_game_list, is_game_valid
+from .bga_create_game import create_bga_game, setup_bga_game
+from .utils import send_help
 
 LOG_FILENAME = "errs"
 logger = logging.getLogger(__name__)

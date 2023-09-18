@@ -1,16 +1,17 @@
 [tool.poetry]
-name = "bga"
+name = "bga-match-maker"
 version = "0.1.0"
 description = ""
 authors = ["Your Name <you@example.com>"]
 license = "Apache2"
 readme = "README.md"
 
+[tool.poetry.scripts]
+bga-match-maker = "bga_match_maker.main:main"
+
 [tool.poetry.dependencies]
 python = "^3.10"
-aiohttp = "^3.8.5"
 requests = "^2.31.0"
-
 
 [build-system]
 requires = ["poetry-core"]

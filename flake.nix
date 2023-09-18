@@ -3,6 +3,8 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-23.05";
     systems.url = "github:nix-systems/default";
     devenv.url = "github:cachix/devenv";
+    poetry2nix.url = "github:nix-community/poetry2nix";
+    poetry2nix.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   nixConfig = {
@@ -10,11 +12,22 @@
     extra-substituters = "https://devenv.cachix.org";
   };
 
-  outputs = { self, nixpkgs, devenv, systems, ... } @ inputs:
+  outputs = { self, nixpkgs, devenv, systems, poetry2nix, ... } @ inputs:
     let
       forEachSystem = nixpkgs.lib.genAttrs (import systems);
     in
     {
+      packages = forEachSystem (system:
+          let
+            inherit (poetry2nix.legacyPackages.${system}) mkPoetryApplication;
+            pkgs = nixpkgs.legacyPackages.${system};
+          in
+          {
+            bga-match-maker= mkPoetryApplication { projectDir = self; };
+            default = self.packages.${system}.bga-match-maker;
+          }
+      );
+
       devShells = forEachSystem
         (system:
           let
@@ -29,12 +42,6 @@
                     enable = true;
                     poetry.enable = true;
                   };
-                  # https://devenv.sh/reference/options/
-                  packages = [ pkgs.hello ];
-
-                  enterShell = ''
-                    hello
-                  '';
                 }
               ];
             };

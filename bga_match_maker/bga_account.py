@@ -5,9 +5,9 @@ from logging.handlers import RotatingFileHandler
 import re
 import time
 import urllib.parse
-
 import requests
-from bga_game_list import get_game_list
+
+from .bga_game_list import get_game_list
 
 LOG_FILENAME = "errs"
 logger = logging.getLogger(__name__)
