@@ -67,20 +67,25 @@ class BGAAccount:
             return False
         self.request_token = request_token_match[1]
 
-    def fetch(self, url):
+    def fetch(self, url, **kwargs):
         """Generic get."""
         logger.debug("\nGET: " + url)
-        with self.session.get(url) as response:
+
+        # This cookie need to also be in the headers.
+        request_token = self.session.cookies.get("TournoiEnLigneidt")
+        if request_token:
+            kwargs.setdefault("headers", {}).setdefault("X-Request-Token", request_token)
+        with self.session.get(url, **kwargs) as response:
             resp_text = response.text
             if resp_text[0] in ["{", "["]:  # If it's a json
-                print(f"Fetched {url}. Resp: " + resp_text[:80])
+                logger.debug(f"Fetched {url}. Resp: " + resp_text[:150])
             return resp_text
 
     def post(self, url, params):
         """Generic post."""
         with self.session.post(url, data=params) as response:
             resp_text = response.text
-            print(f"Posted {url}. Resp: " + resp_text[:80])
+            logger.debug(f"Posted {url}. Resp: " + resp_text[:80])
 
     def login(self, username, password):
         """Login to BGA provided the username/password. The session will
@@ -138,7 +143,7 @@ class BGAAccount:
         Returns (table id (int), error string (str))"""
         # Try to close any logged-in session gracefully
         lower_game_name = re.sub(r"[^a-z0-9]", "", game_name_part.lower())
-        self.quit_table()
+        # self.quit_table()
         self.quit_playing_with_friends()
         games, err_msg = get_game_list()
         if len(err_msg) > 0:
@@ -210,7 +215,7 @@ class BGAAccount:
         # Set defaults if they're not present
         defaults = {
             "mode": "normal",
-            "presentation": "Made by discord BGA bot (github.com/pocc/bga_discord)",
+            "presentation": "Made by the good bot"
         }
         # options will overwrite defaults if they are there
         defaults.update(options)
@@ -323,7 +328,7 @@ class BGAAccount:
     def get_player_id(self, player):
         """Given the name of a player, get their player id."""
         url = self.base_url + "/player/player/findplayer.html"
-        params = {"q": player, "start": 0, "count": "Infinity"}
+        params = {"nofriends": "", "q": player, "start": 0, "count": "Infinity"}
         url += "?" + urllib.parse.urlencode(params)
         resp = self.fetch(url)
         resp_json = json.loads(resp)
@@ -360,12 +365,16 @@ class BGAAccount:
 
     def get_tables(self, player_id):
         """Get all of the tables that a player is playing at. Tables are returned as json objects."""
+
         url = self.base_url + "/tablemanager/tablemanager/tableinfos.html"
-        params = {"playerfilter": player_id, "dojo.preventCache": str(int(time.time()))}
+        params = {"status": "play", "playerfilter": player_id, "dojo.preventCache": str(int(time.time()))}
         url += "?" + urllib.parse.urlencode(params)
         resp = self.fetch(url)
         resp_json = json.loads(resp)
-        return resp_json["data"]["tables"]
+        result = resp_json.get("data", {}).get("tables", None)
+        if result is None:
+            raise Exception("Could not load player tables")
+        return result
 
     def get_table_metadata(self, table_data):
         """Get the numbure of moves and progress of the game as strings"""
