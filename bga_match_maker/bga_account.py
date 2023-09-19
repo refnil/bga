@@ -6,6 +6,7 @@ import re
 import time
 import urllib.parse
 import requests
+import time
 
 from .bga_game_list import get_game_list
 
@@ -70,6 +71,7 @@ class BGAAccount:
     def fetch(self, url, **kwargs):
         """Generic get."""
         logger.debug("\nGET: " + url)
+        time.sleep(1)
 
         # This cookie need to also be in the headers.
         request_token = self.session.cookies.get("TournoiEnLigneidt")
@@ -82,6 +84,7 @@ class BGAAccount:
             return resp_text
 
     def post(self, url, params):
+        time.sleep(1)
         """Generic post."""
         with self.session.post(url, data=params) as response:
             resp_text = response.text
@@ -171,7 +174,7 @@ class BGAAccount:
                 err = f"`{lower_game_name}` matches [{','.join(games_found)}]. Use more letters to match."
                 return -1, err
             game_name = games_found[0]
-        game_id = lower_games[game_name]
+        game_id = lower_games[game_name]["id"]
         url = self.base_url + "/table/table/createnew.html"
         params = {
             "game": game_id,

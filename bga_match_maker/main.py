@@ -8,9 +8,8 @@ import logging.handlers
 import argparse
 
 from .bga_account import BGAAccount
-from .bga_game_list import bga_game_message_list, get_game_list, is_game_valid
-from .bga_create_game import create_bga_game, setup_bga_game
-from .utils import send_help
+from .bga_game_list import get_game_list
+from .bga_create_game import create_bga_game
 
 LOG_FILENAME = "errs"
 logger = logging.getLogger(__name__)
@@ -56,13 +55,22 @@ class Config:
 
     def users_gen(self):
         with open(self.users_path) as f:
-            users = json.load(f)
-            if isinstance(users, list):
-                for user in users:
-                    if isinstance(user, str):
-                        yield User(user)
-                    else:
-                        yield User(user['username'], user['password'])
+            loaded = json.load(f)
+            users = None
+
+            if isinstance(loaded, list):
+                users = loaded
+            elif isinstance(loaded, dict):
+                users = loaded.get("users")
+
+            if users is None:
+                raise Exception("users.json has wrong format")
+
+            for user in users:
+                if isinstance(user, str):
+                    yield User(user)
+                else:
+                    yield User(user['username'], user['password'])
 
     def users(self):
         return {user.name: user for user in self.users_gen()}
@@ -130,7 +138,7 @@ def apply_operations(creater: User, operations: typing.List[Operation], dry_run)
     for op in operations:
         found_table = None
 
-        game_id = games[op.game]
+        game_id = games[op.game]["id"]
         op_names = set(op.toInvite) | {op.toCreate}
 
         for table in tables.values():
@@ -148,7 +156,7 @@ def apply_operations(creater: User, operations: typing.List[Operation], dry_run)
 
         if found_table is not None:
             logger.debug(f"Found table {op=}")
-            break
+            continue
 
         if dry_run:
             logger.info(f"Dry run: ${op=}")
@@ -191,8 +199,6 @@ def main():
         print("config validated")
         print(operations)
         return
-
-    print(users, operations, errors)
 
     for username, ops in op_per_creater.items():
         user = users[username]

@@ -21,7 +21,7 @@ logger.addHandler(handler)
 logger.setLevel(logging.DEBUG)
 
 
-GAME_LIST_PATH = "src/bga_game_list.json"
+GAME_LIST_PATH = "bga_game_list.json"
 
 
 def get_game_list_from_cache():
@@ -35,7 +35,7 @@ def get_game_list():
     The url below should be accessible unauthenticated (test with curl).
     """
     sixhours = 21600
-    if time.time() - sixhours < os.path.getmtime(GAME_LIST_PATH):
+    if False and os.path.exists(GAME_LIST_PATH) and time.time() - sixhours < os.path.getmtime(GAME_LIST_PATH):
         return get_game_list_from_cache()
     url = "https://boardgamearena.com/gamelist?section=all"
     with requests.Session() as session:
@@ -46,49 +46,42 @@ def get_game_list():
                     logger.debug("Loading game list from cache because BGA was unavailable")
                     return json.loads(f.read()), ""
             html = response.text
-            # Parse an HTML list
-            results = re.findall(r"item_tag_\d+_(\d+)[\s\S]*?name\">\s+([^<>]*)\n", html)
-            # Sorting games so when writing, git picks up on new entries
-            results.sort(key=lambda x: x[1])
+
+            lines = html.splitlines()
+
+            # Search a line defining the variable globalUserInfos=
+            infosLine = next(line for line in lines if "globalUserInfos=" in line)
+
+            # Load the json object
+            # Start at first { and remove the last char (a ';')
+            infos = json.loads(infosLine[infosLine.index("{"):-1])
+
+            game_list = infos["game_list"]
+
             games = {}
-            for r in results:
-                games[r[1]] = int(r[0])
+
+            for game in game_list:
+                name = game["display_name_en"]
+                id = game["id"]
+                codename = game["name"]
+
+                games[name] = {
+                    "id": id,
+                    "codename": codename
+                }
+
             # We need to read AND update the existing json because the BGA game list doesn't
             # include "games in review" that may be saved in the json.
             update_games_cache(games)
             return games, ""
 
 
-def bga_game_message_list():
-    """List the games that BGA currently offers as a list of str messages less than 1000 chars."""
-    game_data, err_msg = get_game_list()
-    if len(err_msg) > 0:
-        return err_msg
-    game_list = list(game_data.keys())
-    tr_games = [g[:22] for g in game_list]
-    retlist = []
-    retmsg = ""
-    for i in range(len(tr_games) // 5 + 1):
-        retmsg += "\n"
-        for game_name in tr_games[5 * i : 5 * (i + 1)]:
-            retmsg += "{:<24}".format(game_name)
-        if i % 15 == 0 and i > 0 or i == len(tr_games) // 5:
-            # Need to truncate at 1000 chars because max message length for discord is 2000
-            retlist.append("```" + retmsg + "```")
-            retmsg = ""
-    return retlist
-
-
 def update_games_cache(games):
-    with open(GAME_LIST_PATH, "r") as f:
-        file_text = f.read()
-        file_games = json.loads(file_text)
-        games.update(file_games)
     with open(GAME_LIST_PATH, "w") as f:
         f.write(json.dumps(games, indent=2) + "\n")
 
 
-async def is_game_valid(game):
+def is_game_valid(game):
     # Check if any words are games
     games, errs = get_game_list()
     if errs:
