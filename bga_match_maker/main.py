@@ -82,6 +82,9 @@ class Config:
             for elem in elems:
                 yield from parse_any(elem, context)
 
+        def make_operation(game, context):
+            return Operation(game, **context)
+
         def parse_dict(elem, parent_context: ChainMap):
             context = parent_context.new_child()
 
@@ -104,7 +107,7 @@ class Config:
 
             game = elem.get("game")
             if game is not None:
-                yield Operation(game, **context)
+                yield make_operation(game, context)
 
             yield from parse_any(elem.get("children"), context)
 
@@ -115,6 +118,8 @@ class Config:
                 yield from parse_dict(elem, context)
             elif isinstance(elem, list):
                 yield from parse_list(elem, context)
+            elif isinstance(elem, str):
+                yield make_operation(elem, context)
             else:
                 errors.append(Exception(elem))
 

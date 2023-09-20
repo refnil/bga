@@ -273,8 +273,8 @@ class BGAAccount:
             elif option == "players":
                 # Change minimum and maximum number of players
                 option_data["path"] = "/table/table/changeWantedPlayers.html"
-                [minp, maxp] = updated_options[option].split("-")
-                option_data["params"] = {"minp": minp, "maxp": maxp}
+                player = updated_options[option]
+                option_data["params"] = {"minp": player, "maxp": player}
             elif option == "restrictgroup":
                 option_data["path"] = "/table/table/restrictToGroup.html"
                 group_options = self.get_group_options(table_id)
@@ -322,7 +322,7 @@ class BGAAccount:
 
     def get_group_options(self, table_id):
         """The friend group id is unique to every user. Search the table HTML for it."""
-        table_url = self.base_url + "/table?table=" + str(table_id)
+        table_url = self.base_url + "/table?nr=true&table=" + str(table_id)
         html_text = self.fetch(table_url)
         restrict_group_select = re.search(r'<select id="restrictToGroup">([\s\S]*?)<\/select>', html_text)[0]
         options = re.findall(r'"(\d*)">([^<]*)', restrict_group_select)
