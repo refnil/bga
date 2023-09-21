@@ -8,6 +8,8 @@ import urllib.parse
 import requests
 import time
 
+from bga_match_maker.cache_to_file import cache_to_file
+
 from .bga_game_list import get_game_list
 
 LOG_FILENAME = "errs"
@@ -83,12 +85,13 @@ class BGAAccount:
                 logger.debug(f"Fetched {url}. Resp: " + resp_text[:150])
             return resp_text
 
-    def post(self, url, params):
+    def post(self, url, params, **kwargs):
         time.sleep(1)
         """Generic post."""
-        with self.session.post(url, data=params) as response:
+        with self.session.post(url, data=params, **kwargs) as response:
             resp_text = response.text
             logger.debug(f"Posted {url}. Resp: " + resp_text[:80])
+            return response
 
     def login(self, username, password):
         """Login to BGA provided the username/password. The session will
@@ -148,9 +151,10 @@ class BGAAccount:
         lower_game_name = re.sub(r"[^a-z0-9]", "", game_name_part.lower())
         # self.quit_table()
         self.quit_playing_with_friends()
-        games, err_msg = get_game_list()
-        if len(err_msg) > 0:
-            return -1, err_msg
+        try:
+            games = get_game_list()
+        except Exception:
+            return None, -1, "Could not get game list"
         lower_games = {}
         for game in games:
             lower_name = re.sub(r"[^a-z0-9]", "", game.lower())
@@ -169,12 +173,13 @@ class BGAAccount:
                     f"`{lower_game_name}` is not available on BGA. Check your spelling "
                     f"(capitalization and special characters do not matter)."
                 )
-                return -1, err
+                return None, -1, err
             elif len(games_found) > 1:
                 err = f"`{lower_game_name}` matches [{','.join(games_found)}]. Use more letters to match."
-                return -1, err
+                return None, -1, err
             game_name = games_found[0]
-        game_id = lower_games[game_name]["id"]
+        game = lower_games[game_name]
+        game_id = game["id"]
         url = self.base_url + "/table/table/createnew.html"
         params = {
             "game": game_id,
@@ -188,18 +193,18 @@ class BGAAccount:
             resp_json = json.loads(resp)
         except json.decoder.JSONDecodeError:
             logger.error("Unable to decode response json:" + resp)
-            return -1, "Unable to parse JSON from Board Game Arena."
+            return None, -1, "Unable to parse JSON from Board Game Arena."
         if resp_json["status"] == "0":
             err = resp_json["error"]
             if err.startswith("You have a game in progress"):
                 matches = re.match(r"(^[\w !]*)[^\/]*([^\"]*)", err)
                 err = matches[1] + "Quit this game first (1 realtime game at a time): " + self.base_url + matches[2]
-            return -1, err
+            return None, -1, err
         table_id = resp_json["data"]["table"]
-        return table_id, ""
+        return game, table_id, ""
 
-    def set_table_options(self, options, table_id):
-        url_data = self.parse_options(options, table_id)
+    def set_table_options(self, options, table_id, game_name):
+        url_data = self.parse_options(options, table_id, game_name)
         if isinstance(url_data, str):  # In this case it's an error
             return url_data
         logger.debug("Got url data :" + str(url_data))
@@ -213,7 +218,7 @@ class BGAAccount:
         url += "?" + urllib.parse.urlencode(params)
         self.fetch(url)
 
-    def parse_options(self, options, table_id):
+    def parse_options(self, options, table_id, game_name):
         """Create url data that can be parsed as urls"""
         # Set defaults if they're not present
         defaults = {
@@ -295,7 +300,20 @@ class BGAAccount:
                 option_data["path"] = "/table/table/changeoption.html"
                 option_data["params"] = {"id": option, "value": updated_options[option]}
             else:
-                return f"Option {option} not a valid option."
+                game_info = self.get_game_info(game_name)
+                breakpoint()
+                try:
+                    game_option = next(go for go in game_info["options"] if go["name"] == option)
+                    option_id = game_option["id"]
+                    game_value = next(v for v in game_option["values"] if v["name"] == value)
+                    value_id = game_value["id"]
+
+                    option_data["path"] = "/table/table/changeoption.html"
+                    option_data["params"] = {"id": option_id, "value": value_id}
+
+                except StopIteration:
+                    logger.warn(f"Cannot set {option=} with {value=}")
+                    return f"Option {option} not a valid option."
 
             url_data.append(option_data)
         return url_data
@@ -418,6 +436,16 @@ class BGAAccount:
         logger.debug(f"Sending message to {player_name} with length {len(msg_to_send)}")
         self.post(url, params)
         return "Message sent"
+
+    def get_game_info(self, game_name):
+        return cache_to_file(game_name, lambda: self._get_game_info_no_cache(game_name))
+
+    def _get_game_info_no_cache(self, game_name):
+        response = self.post("https://boardgamearena.com/gamelist/gamelist/gameDetails.html", {"game": game_name}, headers={"X-Request-Token": self.request_token})
+        if response.status_code != 200:
+            raise Exception("Could not fetch game info for ${game_name=}")
+
+        return response.json()["results"]
 
     def close_connection(self):
         """Close the connection. aiohttp complains otherwise."""

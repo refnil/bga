@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-"""Bot to create games on discord."""
 from collections import ChainMap, defaultdict
 import typing
 import json
@@ -11,15 +9,7 @@ from .bga_account import BGAAccount
 from .bga_game_list import get_game_list
 from .bga_create_game import create_bga_game
 
-LOG_FILENAME = "errs"
 logger = logging.getLogger(__name__)
-logging.getLogger("discord").setLevel(logging.WARN)
-# Add the log message handler to the logger
-handler = logging.handlers.RotatingFileHandler(LOG_FILENAME, maxBytes=10000000, backupCount=0)
-formatter = logging.Formatter("%(asctime)s | %(name)s | %(levelname)s | %(message)s")
-handler.setFormatter(formatter)
-logger.addHandler(handler)
-logger.setLevel(logging.DEBUG)
 
 parser = argparse.ArgumentParser(prog="bga-utils")
 parser.add_argument('--users-path', required=True)
@@ -110,6 +100,7 @@ class Config:
                 yield make_operation(game, context)
 
             yield from parse_any(elem.get("children"), context)
+            yield from parse_any(elem.get("c"), context)
 
         def parse_any(elem, context: ChainMap):
             if elem is None:
@@ -138,7 +129,7 @@ def apply_operations(creater: User, operations: typing.List[Operation], dry_run)
     player_id = account.get_player_id(creater.name)
 
     tables = account.get_tables(player_id) or {}
-    games = get_game_list()[0]
+    games = get_game_list()
 
     for op in operations:
         found_table = None
@@ -179,7 +170,7 @@ def main():
     (operations, errors) = config.operations()
     op_per_creater = defaultdict(list)
 
-    (game_list, _nothing) = get_game_list()
+    game_list = get_game_list()
 
     for op in operations:
         creater = op.toCreate
@@ -211,4 +202,5 @@ def main():
 
 
 if __name__ == "__main__":
+    # BGAAccount().get_game_info("wingspan")
     main()

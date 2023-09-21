@@ -12,12 +12,12 @@ def create_bga_game(bga_account: BGAAccount, game, players, options):
     # If the player is a discord tag, this will be
     # {"bga player": "discord tag"}, otherwise {"bga player":""}
     error_players = []
-    table_id, create_err = bga_account.create_table(game)
+    game, table_id, create_err = bga_account.create_table(game)
     if len(create_err) > 0:
         logger.info(f"Cannot create game ${game=}")
         return
     valid_bga_players = []
-    err_msg = bga_account.set_table_options(options, table_id)
+    err_msg = bga_account.set_table_options(options, table_id, game["codename"])
     if err_msg:
         logger.info(f"Cannot set table options ${game=} ${options=}")
         return
