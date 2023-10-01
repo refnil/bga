@@ -146,16 +146,20 @@ def apply_operations(creater: User, operations: typing.List[Operation], dry_run)
             op_names = set(op.toInvite) | {op.toCreate}
 
             for table in tables.values():
+                # The table has the right game
                 if game_id != int(table['game_id']):
                     continue
+
+                # The right person created the table
                 if player_id != table["table_creator"]:
                     continue
 
                 player_names = {player["fullname"] for player in table["players"].values()}
-                if player_names != op_names:
+                # If players are missing from the expected name list, then abort
+                if player_names < op_names:
                     continue
 
-                # Check parameters
+                # Check that parameters for the game are correct
                 if len(op.options) > 0:
                     # Check the player count if available
                     players = op.options.get("players", None)
