@@ -203,8 +203,9 @@ def apply_operations(creater: User, operations: typing.List[Operation], dry_run)
                 continue
 
             if dry_run:
-                logger.info(f"Create game (dry run): ${op=}")
+                logger.info(f"Create game (DRY RUN): ${op=}")
             else:
+                logger.info(f"Creating game. ${op=}")
                 create_bga_game(account, op.game, op.toInvite, op.options)
         except Exception as e:
             logger.exception(e)
