@@ -6,20 +6,12 @@ import re
 import time
 import urllib.parse
 import requests
-import time
 
 from bga_match_maker.cache_to_file import cache_to_file
 
 from .bga_game_list import get_game_list
 
-LOG_FILENAME = "errs"
 logger = logging.getLogger(__name__)
-handler = RotatingFileHandler(LOG_FILENAME, maxBytes=10000000, backupCount=0)
-formatter = logging.Formatter("%(asctime)s | %(name)s | %(levelname)s | %(message)s")
-handler.setFormatter(formatter)
-logger.addHandler(handler)
-logger.setLevel(logging.DEBUG)
-
 
 MODE_TYPES = {
     "normal": 0,
@@ -301,7 +293,6 @@ class BGAAccount:
                 option_data["params"] = {"id": option, "value": updated_options[option]}
             else:
                 game_info = self.get_game_info(game_name)
-                breakpoint()
                 try:
                     game_option = next(go for go in game_info["options"] if go["name"] == option)
                     option_id = game_option["id"]

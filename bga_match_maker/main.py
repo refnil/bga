@@ -10,6 +10,13 @@ from .bga_game_list import get_game_list
 from .bga_create_game import create_bga_game
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+ch.setFormatter(formatter)
+logger.addHandler(ch)
 
 parser = argparse.ArgumentParser(prog="bga-utils")
 parser.add_argument('--users-path', required=True)
@@ -132,32 +139,71 @@ def apply_operations(creater: User, operations: typing.List[Operation], dry_run)
     games = get_game_list()
 
     for op in operations:
-        found_table = None
+        try:
+            found_table = None
 
-        game_id = games[op.game]["id"]
-        op_names = set(op.toInvite) | {op.toCreate}
+            game_id = games[op.game]["id"]
+            op_names = set(op.toInvite) | {op.toCreate}
 
-        for table in tables.values():
-            if game_id != int(table['game_id']):
+            for table in tables.values():
+                if game_id != int(table['game_id']):
+                    continue
+                if player_id != table["table_creator"]:
+                    continue
+
+                player_names = {player["fullname"] for player in table["players"].values()}
+                if player_names != op_names:
+                    continue
+
+                # Check parameters
+                if len(op.options) > 0:
+                    # Check the player count if available
+                    players = op.options.get("players", None)
+                    if players is not None:
+                        if str(players) != table["max_player"]:
+                            continue
+
+                    # Check options that are handle by changeoption.html
+                    # Remove options that are set via other paths than changeoption.html
+                    options_copy = dict(op.options)
+                    options_copy.pop("mode", None)
+                    options_copy.pop("minrep", None)
+                    options_copy.pop("presentation", None)
+                    options_copy.pop("levels", None)
+                    options_copy.pop("players", None)
+                    options_copy.pop("restrictgroup", None)
+                    options_copy.pop("lang", None)
+
+                    optionsToCheck = account.parse_options(options_copy, table["id"], games[op.game]["codename"])
+
+                    allOptionOK = False
+                    for optionToCheck in optionsToCheck:
+                        if optionToCheck["path"] != "/table/table/changeoption.html":
+                            # Only handle changeoption for now
+                            continue
+                        optionIdToCheck = optionToCheck["params"]["id"]
+                        optionValueToCheck = optionToCheck["params"]["value"]
+                        if table["options"].get(str(optionIdToCheck)) != str(optionValueToCheck):
+                            break
+                    else:
+                        allOptionOK = True
+
+                    if not allOptionOK:
+                        continue
+
+                found_table = table
+                break
+
+            if found_table is not None:
+                logger.info(f"Found table {op=}")
                 continue
-            if player_id != table["table_creator"]:
-                continue
 
-            player_names = {player["fullname"] for player in table["players"].values()}
-            if player_names != op_names:
-                continue
-
-            found_table = table
-            break
-
-        if found_table is not None:
-            logger.debug(f"Found table {op=}")
-            continue
-
-        if dry_run:
-            logger.info(f"Dry run: ${op=}")
-        else:
-            create_bga_game(account, op.game, op.toInvite, op.options)
+            if dry_run:
+                logger.info(f"Dry run: ${op=}")
+            else:
+                create_bga_game(account, op.game, op.toInvite, op.options)
+        except Exception as e:
+            logger.exception(e)
 
     account.logout()
     account.close_connection()
