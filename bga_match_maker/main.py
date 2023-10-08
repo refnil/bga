@@ -4,6 +4,7 @@ import json
 from dataclasses import dataclass, field
 import logging.handlers
 import argparse
+import random
 
 from .bga_account import BGAAccount
 from .bga_game_list import get_game_list
@@ -36,11 +37,21 @@ class User:
 
 
 @dataclass
+class Limit:
+    name: str
+    limit: int
+
+
+@dataclass
 class Operation:
     game: str
     toCreate: str
+    limits: typing.List[Limit] = field(default_factory=list)
     toInvite: typing.Set[str] = field(default_factory=set)
     options: typing.Dict[str, str] = field(default_factory=dict)
+
+    def __hash__(self):
+        return id(self)
 
 
 @dataclass
@@ -75,6 +86,8 @@ class Config:
     def operations(self):
         errors = []
 
+        limits = []
+
         def parse_list(elems, context):
             for elem in elems:
                 yield from parse_any(elem, context)
@@ -102,6 +115,12 @@ class Config:
             if options is not None:
                 context["options"] = context.get("options", {}) | options
 
+            limit_value = elem.get("limit")
+            if limit_value is not None:
+                limit = Limit(f"Limit {len(limits) + 1}", int(limit_value))
+                limits.append(limit)
+                context["limits"] = context.get("limits", []) + [limit]
+
             game = elem.get("game")
             if game is not None:
                 yield make_operation(game, context)
@@ -110,20 +129,30 @@ class Config:
             yield from parse_any(elem.get("c"), context)
 
         def parse_any(elem, context: ChainMap):
-            if elem is None:
-                pass
-            elif isinstance(elem, dict):
-                yield from parse_dict(elem, context)
-            elif isinstance(elem, list):
-                yield from parse_list(elem, context)
-            elif isinstance(elem, str):
-                yield make_operation(elem, context)
-            else:
-                errors.append(Exception(elem))
+            try:
+                if elem is None:
+                    pass
+                elif isinstance(elem, dict):
+                    yield from parse_dict(elem, context)
+                elif isinstance(elem, list):
+                    yield from parse_list(elem, context)
+                elif isinstance(elem, str):
+                    yield make_operation(elem, context)
+                else:
+                    errors.append(Exception(elem))
+            except Exception as e:
+                errors.append(e)
 
         with open(self.operations_path) as f:
             ops = list(parse_any(json.load(f), ChainMap()))
             return (ops, errors)
+
+
+@dataclass
+class LimitCount:
+    target: int = 0
+    current: int = 0
+    ops: typing.Set[Operation] = field(default_factory=set)
 
 
 def apply_operations(creater: User, operations: typing.List[Operation], dry_run):
@@ -137,6 +166,8 @@ def apply_operations(creater: User, operations: typing.List[Operation], dry_run)
 
     tables = account.get_tables(player_id) or {}
     games = get_game_list()
+
+    limits = defaultdict(LimitCount)
 
     for op in operations:
         try:
@@ -198,17 +229,63 @@ def apply_operations(creater: User, operations: typing.List[Operation], dry_run)
                 found_table = table
                 break
 
+            for limit in op.limits:
+                limits[limit.name].target = limit.limit
+
             if found_table is not None:
                 logger.info(f"Found table. Skipping creation. {op=}")
+
+                for limit in op.limits:
+                    limits[limit.name].current += 1
+                continue
+            else:
+                if len(op.limits) > 0:
+                    for limit in op.limits:
+                        limits[limit.name].ops.add(op)
+                else:
+                    if dry_run:
+                        logger.info(f"Could create game (DRY RUN)(NO LIMITS): ${op=}")
+                    else:
+                        logger.info(f"Creating game. (NO LIMITS) ${op=}")
+                        create_bga_game(account, op.game, op.toInvite, op.options)
+
+        except Exception as e:
+            logger.exception(e)
+
+    logger.debug(f"limits {limits}")
+    to_remove_by_limit: typing.Set[Operation] = set()
+    for limit in limits.values():
+        if limit.current >= limit.target:
+            to_remove_by_limit.update(limit.ops)
+
+    for name, limit in sorted(limits.items(), key=lambda name_item: name_item[1].target):
+        available_ops = limit.ops - to_remove_by_limit
+
+        missing = limit.target - limit.current
+
+        if missing <= 0 or len(available_ops) == 0:
+            continue
+
+        choices = list(available_ops)
+
+        random.shuffle(choices)
+        logger.info(f"Filling limit {name}: {missing=} available_choice={len(choices)}")
+        for choice in choices:
+            if choice in to_remove_by_limit:
                 continue
 
             if dry_run:
-                logger.info(f"Create game (DRY RUN): ${op=}")
+                logger.info(f"Could create game (DRY RUN)(limit={name}): ${choice=}")
             else:
-                logger.info(f"Creating game. ${op=}")
-                create_bga_game(account, op.game, op.toInvite, op.options)
-        except Exception as e:
-            logger.exception(e)
+                logger.info(f"Creating game. (LIMITS={name}) ${choice=}")
+                create_bga_game(account, choice.game, choice.toInvite, choice.options)
+
+            for choice_limit in choice.limits:
+                name = choice_limit.name
+                limit = limits[name]
+                limit.current += 1
+                if limit.current >= limit.target:
+                    to_remove_by_limit.update(limit.ops)
 
     account.logout()
     account.close_connection()
