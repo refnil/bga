@@ -185,9 +185,11 @@ def apply_operations(creater: User, operations: typing.List[Operation], dry_run)
                 if player_id != table["table_creator"]:
                     continue
 
-                player_names = {player["fullname"] for player in table["players"].values()}
+                table_names = {player["fullname"] for player in table["players"].values()}
                 # If players are missing from the expected name list, then abort
-                if player_names < op_names:
+                missing = op_names - table_names
+                if len(missing) > 0:
+                    logger.debug(f"Skipping by missing players {missing=}")
                     continue
 
                 # Check that parameters for the game are correct
@@ -195,7 +197,10 @@ def apply_operations(creater: User, operations: typing.List[Operation], dry_run)
                     # Check the player count if available
                     players = op.options.get("players", None)
                     if players is not None:
-                        if str(players) != table["max_player"]:
+                        table_players = table["max_player"]
+                        operation_players = str(players)
+                        if operation_players != table_players:
+                            logger.debug(f"Skipping by playing count{table_players=} {operation_players=}")
                             continue
 
                     # Check options that are handle by changeoption.html
