@@ -1,7 +1,6 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-23.11";
-    systems.url = "github:nix-systems/default";
     devenv.url = "github:cachix/devenv";
     poetry2nix.url = "github:nix-community/poetry2nix";
     poetry2nix.inputs.nixpkgs.follows = "nixpkgs";
@@ -13,25 +12,21 @@
   };
 
   outputs = { self, nixpkgs, devenv, systems, poetry2nix, ... } @ inputs:
-    let
-      forEachSystem = nixpkgs.lib.genAttrs (import systems);
-    in
     {
-      packages = forEachSystem (system:
+      packages."x86_64-linux" = 
           let
-            inherit (poetry2nix.legacyPackages.${system}) mkPoetryApplication;
-            pkgs = nixpkgs.legacyPackages.${system};
+            pkgs = nixpkgs.legacyPackages."x86_64-linux";
+            inherit (poetry2nix.lib.mkPoetry2Nix {inherit pkgs;}) mkPoetryApplication;
+            app = mkPoetryApplication { projectDir = ./.;
+            };
           in
           {
-            bga-match-maker= mkPoetryApplication { projectDir = self; };
-            default = self.packages.${system}.bga-match-maker;
-          }
-      );
+            bga-match-maker = app;
+            default = app; 
+          };
 
-      devShells = forEachSystem
-        (system:
-          let
-            pkgs = nixpkgs.legacyPackages.${system};
+      devShells."x86_64-linux" = 
+          let pkgs = nixpkgs.legacyPackages."x86_64-linux";
           in
           {
             default = devenv.lib.mkShell {
@@ -45,6 +40,6 @@
                 }
               ];
             };
-          });
-    };
+          };
+};
 }
