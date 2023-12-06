@@ -2,6 +2,7 @@
 *.db
 *.swp
 *cache*/
+!*.py
 .idea/
 .vscode*
 errs
