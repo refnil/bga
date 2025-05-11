@@ -56,10 +56,10 @@ class BGAAccount:
         resp = self.session.get(self.base_url + "/account")
         resp_text = resp.text
         # example: <input type='hidden' name='request_token' id='request_token' value='soJoMkn9CHYUDg6' />
-        request_token_match = re.search(r"id='request_token' value='([0-9a-f]*)'", resp_text)
+        request_token_match = re.search(r"requestToken: '([0-9a-f]*)',", resp_text)
         if not request_token_match:
             print("Error text\n" + resp_text)  # Return error condition
-            return False
+            raise Exception("Could not get request token")
         self.request_token = request_token_match[1]
 
     def fetch(self, url, **kwargs):
